@@ -1,4 +1,3 @@
-# frontend/gui.py
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
 import os
@@ -10,6 +9,9 @@ from backend.ncbi_fetch import download_pUC18
 from backend.vector_analysis import find_restriction_sites
 from backend.primer_tools import generate_primers, check_tm_difference
 import matplotlib.pyplot as plt
+from biotite.sequence import NucleotideSequence, Annotation, AnnotatedSequence
+from biotite.sequence.graphics import plot_plasmid_map
+
 
 # Каталог с данными
 DATA_FOLDER = "data"
@@ -230,63 +232,53 @@ class PrimerDesignerApp:
 
     def plot_vector(self):
         """
-        Строит полярную карту вектора pUC18.
-        Если загружена вставка и выбраны сайты, формируется рекомбинантный вектор:
-          участок между выбранными позициями заменяется на вставку.
-        Если после рекомбинации сайты рестрикции не найдены, используется исходный вектор.
-        Вставленный фрагмент выделяется красной дугой.
+        Визуализирует карту плазмиды pUC18 с помощью Biotite.
         """
+
         pUC18_record = download_pUC18()
         if not pUC18_record:
             messagebox.showerror("Ошибка", "Не удалось загрузить pUC18!")
             return
 
-        vector_seq = pUC18_record.seq
+        try:
+            seq = NucleotideSequence(str(pUC18_record.seq))
+            annotation = Annotation()
 
-        if self.insert_seq and self.selected_sites:
-            chosen_sites = list(self.selected_sites.values())
-            insertion_start = min(chosen_sites)
-            insertion_end = max(chosen_sites)
-            new_vector = vector_seq[:insertion_start] + self.insert_seq + vector_seq[insertion_end:]
-            insert_start_new = insertion_start
-            insert_end_new = insertion_start + len(self.insert_seq)
-        else:
-            new_vector = vector_seq
-            insert_start_new = None
+            # Добавим гены/ORF из GenBank
+            for feature in pUC18_record.features:
+                if feature.type in ["gene", "CDS"]:
+                    try:
+                        start = int(feature.location.start)
+                        end = int(feature.location.end)
+                        strand = 1 if feature.strand == 1 else -1
+                        label = (
+                            feature.qualifiers.get("label", [""])[0] or
+                            feature.qualifiers.get("gene", [""])[0] or
+                            feature.qualifiers.get("note", [""])[0]
+                        )
+                        annotation.add_feature(label=label, range=(start, end), strand=strand)
+                    except Exception:
+                        continue
 
-        # Пробуем найти рестрикционные сайты в новом векторе
-        unique_sites = find_restriction_sites(new_vector)
-        if not unique_sites:
-            # Если не найдены, используем сайты из исходного вектора
-            unique_sites = find_restriction_sites(vector_seq)
-            if not unique_sites:
-                messagebox.showerror("Ошибка", "Сайты рестрикции не найдены!")
-                return
+            # Добавим вставку, если есть
+            if self.insert_seq and self.selected_sites:
+                chosen_sites = list(self.selected_sites.values())
+                insert_start = min(chosen_sites)
+                insert_end = max(chosen_sites)
+                annotation.add_feature(label="Insert", range=(insert_start, insert_end), strand=1, color="red")
 
-        sequence_length = len(new_vector)
-        fig, ax = plt.subplots(figsize=(7, 7), subplot_kw={'projection': 'polar'})
-        theta = np.linspace(0, 2 * np.pi, 100)
-        ax.plot(theta, [1] * 100, color="black", linewidth=2)
-        colors = plt.cm.get_cmap("tab10", len(unique_sites))
-        for i, (enzyme, site) in enumerate(sorted(unique_sites.items(), key=lambda x: x[1])):
-            angle = (site / sequence_length) * 2 * np.pi
-            ax.scatter(angle, 1, color=colors(i), s=100, label=f"{enzyme}")
+            annotated_seq = AnnotatedSequence(seq, annotation)
 
-        if insert_start_new is not None:
-            angle_start = (insert_start_new / sequence_length) * 2 * np.pi
-            angle_end = (insert_end_new / sequence_length) * 2 * np.pi
-            ax.plot([angle_start, angle_end], [1, 1], color="red", linewidth=6, label="Вставка")
+            fig, ax = plt.subplots(figsize=(7, 7))
+            plot_plasmid_map(ax, annotated_seq)
+            plt.title("Карта pUC18 (Biotite)", fontsize=14)
+            plt.tight_layout()
+            plt.show()
 
-        ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.2), ncol=3, fontsize=10)
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
-        ax.set_yticks([])
-        ax.spines['polar'].set_visible(False)
-        plt.title("Карта вектора pUC18", fontsize=14)
-        plt.show()
+        except Exception as e:
+            messagebox.showerror("Ошибка визуализации", f"Произошла ошибка при построении карты:\n{str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = PrimerDesignerApp(root)
     root.mainloop()
-

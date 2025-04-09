@@ -24,7 +24,7 @@
 
 ## Требования
 
-- Python 3.7+
+- Python 3.12+
 - [Biopython](https://biopython.org/)
 - [Tkinter](https://docs.python.org/3/library/tkinter.html)
 - [Matplotlib](https://matplotlib.org/)
