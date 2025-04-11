@@ -9,9 +9,7 @@ from backend.ncbi_fetch import download_pUC18
 from backend.vector_analysis import find_restriction_sites
 from backend.primer_tools import generate_primers, check_tm_difference
 import matplotlib.pyplot as plt
-from biotite.sequence import NucleotideSequence, Annotation, AnnotatedSequence
-from biotite.sequence.graphics import plot_plasmid_map
-
+from dna_features_viewer import GraphicFeature, GraphicRecord
 
 # Каталог с данными
 DATA_FOLDER = "data"
@@ -20,7 +18,7 @@ class PrimerDesignerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("pUC18 Primer Designer")
-        self.root.geometry("700x500")
+        self.root.geometry("700x450")
         
         # Панель кнопок верхнего уровня
         top_frame = tk.Frame(root)
@@ -232,51 +230,50 @@ class PrimerDesignerApp:
 
     def plot_vector(self):
         """
-        Визуализирует карту плазмиды pUC18 с помощью Biotite.
+        Визуализирует вектор pUC18 и вставку с использованием DNA Features Viewer.
         """
-
         pUC18_record = download_pUC18()
         if not pUC18_record:
             messagebox.showerror("Ошибка", "Не удалось загрузить pUC18!")
             return
 
-        try:
-            seq = NucleotideSequence(str(pUC18_record.seq))
-            annotation = Annotation()
+        vector_seq = pUC18_record.seq
 
-            # Добавим гены/ORF из GenBank
-            for feature in pUC18_record.features:
-                if feature.type in ["gene", "CDS"]:
-                    try:
-                        start = int(feature.location.start)
-                        end = int(feature.location.end)
-                        strand = 1 if feature.strand == 1 else -1
-                        label = (
-                            feature.qualifiers.get("label", [""])[0] or
-                            feature.qualifiers.get("gene", [""])[0] or
-                            feature.qualifiers.get("note", [""])[0]
-                        )
-                        annotation.add_feature(label=label, range=(start, end), strand=strand)
-                    except Exception:
-                        continue
+        features = []
 
-            # Добавим вставку, если есть
-            if self.insert_seq and self.selected_sites:
-                chosen_sites = list(self.selected_sites.values())
-                insert_start = min(chosen_sites)
-                insert_end = max(chosen_sites)
-                annotation.add_feature(label="Insert", range=(insert_start, insert_end), strand=1, color="red")
+        # Добавляем вставку, если есть
+        if self.insert_seq and self.selected_sites:
+            chosen_sites = list(self.selected_sites.values())
+            insertion_start = min(chosen_sites)
+            insertion_end = max(chosen_sites)
+            insert_feature = GraphicFeature(
+                start=insertion_start,
+                end=insertion_start + len(self.insert_seq),
+                strand=+1,
+                color="#ff9999",
+                label="Вставка"
+            )
+            features.append(insert_feature)
+            # Заменяем участок вектора на вставку для новой карты
+            vector_seq = vector_seq[:insertion_start] + self.insert_seq + vector_seq[insertion_end:]
 
-            annotated_seq = AnnotatedSequence(seq, annotation)
+        # Ищем сайты рестрикции в модифицированной последовательности
+        unique_sites = find_restriction_sites(vector_seq)
+        for enzyme, site in unique_sites.items():
+            site_feature = GraphicFeature(
+                start=site,
+                end=site + 1,
+                strand=0,
+                color="#6699cc",
+                label=str(enzyme)
+            )
+            features.append(site_feature)
 
-            fig, ax = plt.subplots(figsize=(7, 7))
-            plot_plasmid_map(ax, annotated_seq)
-            plt.title("Карта pUC18 (Biotite)", fontsize=14)
-            plt.tight_layout()
-            plt.show()
+        record = GraphicRecord(sequence_length=len(vector_seq), features=features)
+        ax, _ = record.plot(figure_width=10)
+        plt.title("Карта вектора pUC18")
+        plt.show()
 
-        except Exception as e:
-            messagebox.showerror("Ошибка визуализации", f"Произошла ошибка при построении карты:\n{str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
