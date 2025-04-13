@@ -1,68 +1,67 @@
 # backend/vector_analysis.py
 
-from Bio.Restriction import AllEnzymes, RestrictionBatch
+from Bio.Seq import Seq
 from Bio.SeqUtils import MeltingTemp as mt
 from Bio.SeqUtils import gc_fraction
-from Bio.Seq import Seq
-
-def get_supported_enzymes(blunt_only=False):
-    """
-    Возвращает список поддерживаемых рестриктаз.
-    Если blunt_only=True, возвращаются только ферменты с тупыми концами.
-    """
-    enzymes = [e for e in AllEnzymes]
-    if blunt_only:
-        enzymes = [e for e in enzymes if hasattr(e, 'is_blunt') and e.is_blunt()]
-    return enzymes
+from backend.restriction_sites import restriction_sites  
+import re
 
 
 def find_restriction_sites(sequence, allow_multiple=False, blunt_only=False):
     """
-    Ищет сайты рестрикции в последовательности.
-    
-    Параметры:
-    - allow_multiple: если False, оставляет только ферменты с 1 сайтом.
-    - blunt_only: если True, фильтрует по тупым концам.
-    
-    Возвращает словарь: {'EcoRI': [позиции]}
+    Ищет сайты рестрикции по пользовательскому словарю.
+    Возвращает словарь: {фермент: [позиции]}
     """
-    enzymes = RestrictionBatch(get_supported_enzymes(blunt_only))
-    enzyme_sites = {enzyme.__name__: enzyme.search(sequence) for enzyme in enzymes}
-    enzyme_sites = {name: sites for name, sites in enzyme_sites.items() if sites}
+    results = {}
 
-    if not allow_multiple:
-        return {name: sites for name, sites in enzyme_sites.items() if len(sites) == 1}
-    
-    return enzyme_sites
+    for enzyme, props in restriction_sites.items():
+        if blunt_only and props["type"] != "blunt":
+            continue
+
+        pattern = props["sequence"]
+        positions = [m.start() for m in re.finditer(f"(?={pattern})", str(sequence))]
+        if not positions:
+            continue
+
+        if not allow_multiple and len(positions) > 1:
+            continue
+
+        results[enzyme] = positions
+
+    return results
 
 
 def find_unique_enzyme_pairs(vector_seq, insert_seq, blunt_only=False):
     """
     Находит пары рестриктаз, у которых по одному уникальному сайту в векторе
     и отсутствуют сайты в вставке.
-
-    Возвращает: [('EcoRI', 'HindIII'), ...]
     """
     vector_sites = find_restriction_sites(vector_seq, allow_multiple=False, blunt_only=blunt_only)
     insert_sites = find_restriction_sites(insert_seq, allow_multiple=True, blunt_only=blunt_only)
 
     insert_enzymes = set(insert_sites.keys())
-    usable = []
+    usable_pairs = []
 
     enzymes = list(vector_sites.keys())
     for i in range(len(enzymes)):
         for j in range(i + 1, len(enzymes)):
             e1, e2 = enzymes[i], enzymes[j]
             if e1 not in insert_enzymes and e2 not in insert_enzymes:
-                usable.append((e1, e2))
-    
-    return usable
+                usable_pairs.append((e1, e2))
+
+    return usable_pairs
+
+
+def get_enzyme_cut_details(enzyme_name):
+    """
+    Возвращает подробности о ферменте: позиция разреза, тип конца и overhang.
+    """
+    return restriction_sites.get(enzyme_name, None)
 
 
 def calculate_tm(primer_seq, na_conc=50, mg_conc=1.5, dNTPs=0.2):
     """
-    Рассчитывает температуру отжига праймера.
-    Используется Wallace rule (по умолчанию).
+    Рассчитывает температуру отжига праймера по формуле nearest-neighbor.
     """
     seq = Seq(primer_seq)
     return round(mt.Tm_NN(seq, Na=na_conc, Mg=mg_conc, dNTPs=dNTPs), 2)
@@ -72,6 +71,4 @@ def gc_content(primer_seq):
     """
     Возвращает GC-состав (%) праймера.
     """
-    # Умножение результата на 100 для преобразования в проценты
     return round(gc_fraction(primer_seq) * 100, 2)
-

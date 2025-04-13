@@ -4,11 +4,10 @@ from Bio.Seq import Seq
 from Bio.SeqUtils import MeltingTemp as mt
 import random
 
-def generate_primers(insert_seq, chosen_sites, min_homology=20, logger=print):
+def generate_primers(insert_seq, chosen_sites, min_homology=20, logger=print, min_len=18, max_len=35):
     """
-    Генерирует праймеры для заданной вставки и пар сайтов рестрикции.
-    Возвращает список кортежей:
-    (enzyme1, forward_primer, forward_effective, enzyme2, reverse_primer, reverse_effective)
+    Генерация праймеров с сайтами рестрикции и контрольными структурами.
+    Возвращает: [(enzyme1, forward_primer, forward_effective, enzyme2, reverse_primer, reverse_effective), ...]
     """
     primers = []
     effective_length = min(len(insert_seq), min_homology)
@@ -17,40 +16,64 @@ def generate_primers(insert_seq, chosen_sites, min_homology=20, logger=print):
         recognition_seq1 = enzyme1.site
         recognition_seq2 = enzyme2.site
 
-        # Пропускаем, если сайты уже есть во вставке
+        # Пропустить, если сайт уже присутствует во вставке
         if recognition_seq1 in insert_seq or recognition_seq2 in insert_seq:
-            logger(f"Пропуск пары {enzyme1} и {enzyme2}: сайт уже есть во вставке.")
+            logger(f"⚠️ Пропущена пара {enzyme1} и {enzyme2}: сайт уже найден во вставке.")
             continue
 
-        forward_padding = ''.join(random.choices("AGCT", k=random.randint(1, 5)))
-        reverse_padding = ''.join(random.choices("AGCT", k=random.randint(1, 5)))
+        # Padding добавляет несколько случайных нуклеотидов для лучшей отрезки ферментом
+        forward_padding = random_padding_with_gc()
+        reverse_padding = random_padding_with_gc()
 
         forward_effective = str(insert_seq[:effective_length])
         reverse_effective = str(Seq(insert_seq[-effective_length:]).reverse_complement())
 
-        # Добавляем GC в начало при низком содержании GC
-        if (forward_effective.count('G') + forward_effective.count('C')) < effective_length // 2:
-            forward_effective = 'GC' + forward_effective
-        if (reverse_effective.count('G') + reverse_effective.count('C')) < effective_length // 2:
-            reverse_effective = 'GC' + reverse_effective
+        # Добавление GC в начало эффективной части при недостатке GC
+        forward_effective = balance_gc(forward_effective)
+        reverse_effective = balance_gc(reverse_effective)
 
         forward_primer = f'{forward_padding}{recognition_seq1}{forward_effective}'
         reverse_primer = f'{reverse_padding}{recognition_seq2}{reverse_effective}'
 
-        logger(f"Пара {enzyme1} - {enzyme2}:")
-        logger(f"  Forward: padding={forward_padding}, site={recognition_seq1}, effective={forward_effective}")
-        logger(f"  Reverse: padding={reverse_padding}, site={recognition_seq2}, effective={reverse_effective}")
+        # Контроль длины
+        if not (min_len <= len(forward_primer) <= max_len and min_len <= len(reverse_primer) <= max_len):
+            logger(f"❌ Пропущена пара {enzyme1}-{enzyme2}: длина праймера вне допустимого диапазона.")
+            continue
+
+        logger(f"🔹 Пара {enzyme1} - {enzyme2}:")
+        logger(f"  ➤ Forward: {forward_primer}")
+        logger(f"  ➤ Reverse: {reverse_primer}")
 
         primers.append((enzyme1, forward_primer, forward_effective,
                         enzyme2, reverse_primer, reverse_effective))
     return primers
 
 
+def random_padding_with_gc():
+    """
+    Генерирует случайную вставку из 1-5 нуклеотидов, обязательно включая хотя бы одну G или C
+    """
+    length = random.randint(1, 5)
+    padding = ''.join(random.choices("AGCT", k=length))
+    if 'G' not in padding and 'C' not in padding:
+        padding = 'G' + padding[1:]
+    return padding
+
+
+def balance_gc(seq):
+    """
+    Добавляет GC в начало, если содержание GC ниже 50%
+    """
+    gc_count = seq.count('G') + seq.count('C')
+    if gc_count < len(seq) // 2:
+        return 'GC' + seq
+    return seq
+
+
 def calculate_tm(effective_seq):
     """
-    Расчёт температуры плавления для эффективной части праймера.
-    Использует упрощённую формулу для коротких последовательностей и
-    Nearest-Neighbor метод для длинных.
+    Температура плавления эффективной части праймера.
+    Короткие — упрощённая формула, длинные — Nearest Neighbor.
     """
     effective_seq = Seq(effective_seq)
     length = len(effective_seq)
@@ -62,15 +85,14 @@ def calculate_tm(effective_seq):
 
 def check_3prime_end(primer):
     """
-    Проверка, что 3'-конец не заканчивается на 'T'
+    Проверка, что 3'-конец НЕ заканчивается на T
     """
     return primer[-1].upper() != 'T'
 
 
 def check_hairpin(primer, min_stem=4, loop_size=3):
     """
-    Проверка шпильки (hairpin) внутри праймера.
-    Поиск комплементарных участков, разделённых петлёй (loop).
+    Поиск шпильки (hairpin) в последовательности: обратнокомплементарные участки с петлёй
     """
     seq = primer.upper()
     L = len(seq)
@@ -87,8 +109,7 @@ def check_hairpin(primer, min_stem=4, loop_size=3):
 
 def check_primer_dimer(forward, reverse, dimer_length=4):
     """
-    Проверка димера между forward и reverse праймерами.
-    Ищет комплементарность на 3'-концах.
+    Поиск димеров на 3’-концах forward и reverse праймеров
     """
     f_end = forward[-dimer_length:].upper()
     r_end = reverse[-dimer_length:].upper()
@@ -99,9 +120,9 @@ def check_primer_dimer(forward, reverse, dimer_length=4):
 def check_secondary_structure(forward, reverse, logger=print):
     """
     Проверка на вторичные структуры:
-    - Шпильки (hairpins)
-    - Димеры между праймерами
-    - T на 3'-конце (только предупреждение)
+    - Hairpins
+    - Primer-dimers
+    - T на 3'-конце (не критично, но предупреждение)
     """
     issues = False
     if not check_3prime_end(forward):
@@ -122,19 +143,20 @@ def check_secondary_structure(forward, reverse, logger=print):
 
 def check_tm_difference(primers, max_tm_diff=5, logger=print):
     """
-    Отбор праймеров с допустимой разницей температур плавления.
-    Возвращает список только тех пар, где разница Tm не превышает max_tm_diff
-    и отсутствуют вторичные структуры.
+    Отбор праймеров с допустимой ΔTm и без вторичных структур.
+    Возвращает только валидные пары.
     """
     valid_pairs = []
     for enzyme1, forward, forward_eff, enzyme2, reverse, reverse_eff in primers:
         tm1 = calculate_tm(forward_eff)
         tm2 = calculate_tm(reverse_eff)
+        delta_tm = abs(tm1 - tm2)
 
-        logger(f"Пара {enzyme1} - {enzyme2}: Tm_forward = {tm1:.0f}°C, Tm_reverse = {tm2:.0f}°C")
+        logger(f"🔍 Пара {enzyme1} - {enzyme2}: Tm_forward = {tm1:.1f}°C, Tm_reverse = {tm2:.1f}°C")
 
-        if abs(tm1 - tm2) <= max_tm_diff and check_secondary_structure(forward, reverse, logger):
+        if delta_tm <= max_tm_diff and check_secondary_structure(forward, reverse, logger):
+            logger("✅ Пара прошла проверку.\n")
             valid_pairs.append((enzyme1, forward, tm1, enzyme2, reverse, tm2))
         else:
-            logger(f"❌ Пара {enzyme1}-{enzyme2} отклонена: ΔTm={abs(tm1 - tm2):.1f}°C или проблемы во вторичной структуре.")
+            logger(f"❌ Пара отклонена: ΔTm={delta_tm:.1f}°C или проблемы структуры.\n")
     return valid_pairs
