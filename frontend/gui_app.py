@@ -3,6 +3,7 @@ import os
 import streamlit as st
 from Bio.Restriction import EcoRI, BamHI, XhoI, SalI
 
+# Добавление пути к модулям
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.restriction_sites import restriction_sites
@@ -12,14 +13,13 @@ from frontend.utils.report_generator import generate_pdf_report
 from frontend.utils.visualize_insert import visualize_insert
 from frontend.utils.visualize_vector import visualize_vector
 
-
 # НАСТРОЙКА СТРАНИЦЫ
-st.set_page_config(page_title="🔬 Cloning Assistant", layout="wide")
+st.set_page_config(page_title="🔬 Помощник клонирования", layout="wide")
 
-# ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ
-theme = st.radio("🎨 Select Theme", options=["Light", "Dark"], horizontal=True)
+# ВЫБОР ТЕМЫ
+theme = st.radio("🎨 Выберите тему", options=["Светлая", "Тёмная"], horizontal=True)
 
-if theme == "Light":
+if theme == "Светлая":
     st.markdown("""
 <style>
         .main { background-color: #111827; }
@@ -101,29 +101,87 @@ else:
 
 # ЗАГОЛОВОК
 st.markdown("""
-<h1>🔬 Cloning Assistant</h1>
+<h1>🔬 Помощник клонирования</h1>
 <p style="font-size: 1.1em;">
-    A smart tool for primer selection, visualization and report generation for your insert. Simply upload your FASTA file and select your enzymes!
+    Умный инструмент для подбора праймеров, визуализации и генерации отчёта. Просто загрузите FASTA-файл и выберите рестриктазы!
 </p>
 """, unsafe_allow_html=True)
 
+# ИНФОРМАЦИЯ О ПРАЙМЕРЕ
+with st.expander("ℹ️ Информация о векторе pUC18 и правила подбора праймеров"):
+    st.markdown(
+        """
+**🔬 О векторе pUC18**
+
+`pUC18` — это синтетический плазмидный вектор, разработанный на основе вектора pBR322. Он широко используется в молекулярном клонировании благодаря своей высокой эффективности, простоте в работе и наличию полезных генетических элементов.
+
+**Основные характеристики pUC18:**
+- 📏 Размер: около **2686 пар оснований (bp)**
+- 🧬 Репликон: **ColE1** — обеспечивает высокое число копий в *E. coli*
+- 💊 **ampR**: ген устойчивости к **ампициллину** — используется для селекции трансформантов
+- 🔷 **lacZα**: участок гена β-галактозидазы для **синего/белого скрининга** (вставка нарушает рамку считывания, колонии — белые)
+- 🧩 **MCS (Multiple Cloning Site)**: мультиклонинг-сайт, включающий более 10 уникальных сайтов рестрикции, вставленный в рамку lacZα
+
+**Преимущества использования pUC18:**
+- 🔝 Высокое количество копий плазмиды (до 500–700 копий на клетку)
+- 🔬 Удобство контроля трансформации (через лак-систему)
+- ⚙️ Универсальность для различных методов клонирования
+- 🧪 Совместимость с множеством рестриктаз и стандартных праймеров (например, M13-форвард/реверс)
+
+---
+
+**🧬 Структура праймера:**
+
+Каждый праймер должен включать:
+1. 🧷 Навеску (1–5 нт) — для эффективного связывания рестриктазы
+2. ✂️ Сайт рестрикции (например, `GAATTC` для EcoRI)
+3. 🔗 Гомологичный участок к вставке (минимум 16 нт, предпочтительно 20)
+
+---
+
+**🧠 Требования к вставке:**
+- ❌ Вставка **не должна содержать сайты рестрикции**, используемые в праймерах
+- ✔️ Выбранные сайты должны быть **уникальны в векторе** (не дублируются)
+- 🌡️ Разница Tm между праймерами — **не более 3°C**
+- 🔄 Обязательная проверка на:
+  - Hairpin-структуры (внутримолекулярные петли)
+  - Primer-dimer (взаимная комплементарность 3'-концов)
+  - Нежелательные T на 3'-конце
+
+---
+
+**🧪 Поддерживаемые ферменты (примеры):**
+`EcoRI`, `BamHI`, `XhoI`, `SalI`, `PstI`, `KpnI`, `XbaI`, `SmaI` и многие другие.  
+Полный список доступен в модуле `restriction_sites.py`.
+
+---
+
+**📄 Генерируемые материалы:**
+- 🖼️ Карта вставки с аннотацией праймеров (линейная и круговая)
+- 📎 Карта вектора pUC18 с сайтами рестрикции
+- 📄 PDF-отчёт с температурой, последовательностями, визуализацией
+- 📧 Отправка email с вложениями отчёта (при необходимости)
+        """,
+        unsafe_allow_html=True
+    )
+
 # ЗАГРУЗКА ПОСЛЕДОВАТЕЛЬНОСТИ
-st.subheader("📂 Sequence loading")
-uploaded_file = st.file_uploader("Download the FASTA insert file", type=["fasta", "fa"])
-express_insert = st.button("📂 Express Insert")
+st.subheader("📂 Загрузка последовательности")
+uploaded_file = st.file_uploader("Загрузите файл вставки в формате FASTA", type=["fasta", "fa"])
+express_insert = st.button("📂 Быстрая вставка и анализ")
 
 insert_seq = None
 if uploaded_file:
     with open("data/user_insert.fasta", "wb") as f:
         f.write(uploaded_file.getvalue())
     insert_seq = load_insert("data/user_insert.fasta")
-    st.success("The insert file has been successfully uploaded.")
+    st.success("Файл вставки успешно загружен.")
 elif express_insert:
     insert_seq = load_insert("data/example_insert.fasta")
-    st.info("Uploaded a quick data example")
+    st.info("Загружен базовый пример вставки.")
 
 # ВЫБОР РЕСТРИКТАЗ
-st.subheader("🧪 Selection of restrictionases")
+st.subheader("🧪 Выбор рестриктаз")
 enzymes_options = {
     'EcoRI': EcoRI,
     'BamHI': BamHI,
@@ -131,7 +189,7 @@ enzymes_options = {
     'SalI': SalI,
 }
 selected_enzymes = st.multiselect(
-    "Select the enzymes to be cloned",
+    "Выберите ферменты для клонирования",
     options=list(enzymes_options.keys()),
     default=['EcoRI', 'BamHI']
 )
@@ -154,46 +212,46 @@ if insert_seq and selected_enzymes:
         for j in range(i + 1, len(selected_enzymes_objs))
     ]
 
-    st.subheader("🧬 Primer generation")
+    st.subheader("🧬 Генерация праймеров")
 
-    with st.spinner("Generating primers and validating Tm..."):
+    with st.spinner("Генерация праймеров и проверка температуры..."):
         raw_primers = generate_primers(insert_seq, restriction_pairs, min_homology=20)
         valid = check_tm_difference(raw_primers, max_tm_diff=5)
 
     if valid:
-        with st.expander("📋 Valid primer pairs"):
+        with st.expander("📋 Валидные пары праймеров"):
             for enzyme1, forward, tm1, enzyme2, reverse, tm2 in valid:
                 st.markdown(f"""
-                    <div class="primer-box">
+                    <div class=\"primer-box\">
                         <strong>{enzyme1.__name__} / {enzyme2.__name__}</strong><br>
                         🔹 Forward: <code>{forward}</code> (Tm: {tm1:.2f}°C)<br>
                         🔸 Reverse: <code>{reverse}</code> (Tm: {tm2:.2f}°C)
                     </div>
                 """, unsafe_allow_html=True)
 
-        st.subheader("🖼️ Visualization")
+        st.subheader("🖼️ Визуализация")
         used_enzymes = {e.__name__ for e1, _, _, e2, _, _ in valid for e in (e1, e2)}
         insert_fig = visualize_insert(insert_seq, valid, output_path="primer_map_insert_both.png")
         vector_fig = visualize_vector(insert_seq=insert_seq, used_enzymes=used_enzymes, output_path="primer_map_vector_both.png")
 
         col1, col2 = st.columns(2)
         with col1:
-            st.image("primer_map_insert_both.png", caption="🧬 Insert with primers", use_column_width=True)
+            st.image("primer_map_insert_both.png", caption="🧬 Вставка с праймерами", use_column_width=True)
         with col2:
-            st.image("primer_map_vector_both.png", caption="🧪 Vector with restriction sites", use_column_width=True)
+            st.image("primer_map_vector_both.png", caption="🧪 Вектор с сайтами рестрикции", use_column_width=True)
 
-        st.subheader("📄 Report generation")
+        st.subheader("📄 Генерация отчёта")
         generate_pdf_report(insert_seq, valid, insert_fig, vector_fig, output_pdf="cloning_report.pdf")
         with open("cloning_report.pdf", "rb") as pdf_file:
             st.download_button(
-                label="📥 Download PDF report",
+                label="📥 Скачать PDF-отчёт",
                 data=pdf_file,
                 file_name="cloning_report.pdf",
                 mime="application/pdf",
             )
     else:
-        st.warning("⚠️ No valid primer pairs were found. Try changing the insert or enzymes.")
+        st.warning("⚠️ Не удалось найти валидные пары праймеров. Попробуйте изменить вставку или рестриктазы.")
 elif insert_seq and not selected_enzymes:
-    st.info("Please select at least two restriction enzymes.")
+    st.info("Пожалуйста, выберите как минимум два фермента.")
 else:
-    st.info("Download the FASTA file or use Express Insert.")
+    st.info("Загрузите FASTA-файл или воспользуйтесь демонстрационной вставкой.")

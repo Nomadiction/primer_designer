@@ -82,9 +82,11 @@ def visualize_vector(insert_seq=None, chosen_site=None, used_enzymes=None, outpu
 
     # Создаем два подграфика для визуализации: линейную и круговую карты
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    
     # Линейная карта
     GraphicRecord(sequence_length=new_length, features=features).plot(ax=ax1, with_ruler=True)
     ax1.set_title("Linear map of vector pUC18")
+   
     # Круговая карта
     CircularGraphicRecord(sequence_length=new_length, features=features).plot(ax=ax2)
     ax2.set_title("Circular map of vector pUC18")

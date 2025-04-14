@@ -34,7 +34,7 @@ def find_restriction_sites(sequence, allow_multiple=False, blunt_only=False):
 def find_unique_enzyme_pairs(vector_seq, insert_seq, blunt_only=False):
     """
     Находит пары рестриктаз, у которых по одному уникальному сайту в векторе
-    и отсутствуют сайты в вставке.
+    и отсутствуют сайты в вставке
     """
     vector_sites = find_restriction_sites(vector_seq, allow_multiple=False, blunt_only=blunt_only)
     insert_sites = find_restriction_sites(insert_seq, allow_multiple=True, blunt_only=blunt_only)
@@ -54,14 +54,14 @@ def find_unique_enzyme_pairs(vector_seq, insert_seq, blunt_only=False):
 
 def get_enzyme_cut_details(enzyme_name):
     """
-    Возвращает подробности о ферменте: позиция разреза, тип конца и overhang.
+    Возвращает подробности о ферменте: позиция разреза, тип конца
     """
     return restriction_sites.get(enzyme_name, None)
 
 
 def calculate_tm(primer_seq, na_conc=50, mg_conc=1.5, dNTPs=0.2):
     """
-    Рассчитывает температуру отжига праймера по формуле nearest-neighbor.
+    Рассчитывает температуру отжига праймера по формуле ближайшего соседа
     """
     seq = Seq(primer_seq)
     return round(mt.Tm_NN(seq, Na=na_conc, Mg=mg_conc, dNTPs=dNTPs), 2)
@@ -69,6 +69,6 @@ def calculate_tm(primer_seq, na_conc=50, mg_conc=1.5, dNTPs=0.2):
 
 def gc_content(primer_seq):
     """
-    Возвращает GC-состав (%) праймера.
+    Возвращает GC-состав (%) праймера
     """
     return round(gc_fraction(primer_seq) * 100, 2)

@@ -73,7 +73,7 @@ def balance_gc(seq):
 def calculate_tm(effective_seq):
     """
     Температура плавления эффективной части праймера.
-    Короткие — упрощённая формула, длинные — Nearest Neighbor.
+    Короткие — упрощённая формула, длинные — метод ближайшего соседа
     """
     effective_seq = Seq(effective_seq)
     length = len(effective_seq)
@@ -92,7 +92,7 @@ def check_3prime_end(primer):
 
 def check_hairpin(primer, min_stem=4, loop_size=3):
     """
-    Поиск шпильки (hairpin) в последовательности: обратнокомплементарные участки с петлёй
+    Поиск шпильки в последовательности: обратнокомплементарные участки с петлёй
     """
     seq = primer.upper()
     L = len(seq)
@@ -120,9 +120,9 @@ def check_primer_dimer(forward, reverse, dimer_length=4):
 def check_secondary_structure(forward, reverse, logger=print):
     """
     Проверка на вторичные структуры:
-    - Hairpins
-    - Primer-dimers
-    - T на 3'-конце (не критично, но предупреждение)
+    - Шпильки
+    - Праймеры-димеры
+    - T на 3'-конце
     """
     issues = False
     if not check_3prime_end(forward):
@@ -144,7 +144,7 @@ def check_secondary_structure(forward, reverse, logger=print):
 def check_tm_difference(primers, max_tm_diff=5, logger=print):
     """
     Отбор праймеров с допустимой ΔTm и без вторичных структур.
-    Возвращает только валидные пары.
+    Возвращает только валидные пары
     """
     valid_pairs = []
     for enzyme1, forward, forward_eff, enzyme2, reverse, reverse_eff in primers:

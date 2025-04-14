@@ -1,3 +1,5 @@
+# frontend/email_sender.py
+
 import smtplib
 import base64
 from email.mime.multipart import MIMEMultipart

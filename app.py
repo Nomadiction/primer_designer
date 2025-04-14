@@ -10,5 +10,7 @@ threading.Thread(target=start_streamlit, daemon=True).start()
 
 time.sleep(2.5)  
 
-webview.create_window("Cloning Assistant", "http://localhost:8501", width=1200, height=800)
+webview.create_window("Cloning Assistant", "http://localhost:8501", width=1200, height=900)
 webview.start()
+
+# start_streamlit()
